@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smash Counterpick Helper</title>
+<style>
+:root{--bg:#fff;--fg:#1b1b1b;--mut:#666;--line:#e6e6e6;--c0:#a8461a;--b0:#fbe9df;--c1:#0d6b60;--b1:#dcf2ee;--c2:#7a2e8c;--b2:#f3e4f6;--d:#555;--db:#efefef}
+@media (prefers-color-scheme:dark){:root{--bg:#121212;--fg:#ececec;--mut:#9b9b9b;--line:#2b2b2b;--c0:#f2a273;--b0:#3b2317;--c1:#72d8c6;--b1:#133b35;--c2:#e0a3ee;--b2:#3a1f40;--d:#c4c4c4;--db:#262626}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,sans-serif}
+main{max-width:560px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:20px;font-weight:600;margin:0 0 4px}
+.sub{color:var(--mut);font-size:13px;margin:0 0 10px}
+label{display:block;font-size:12px;color:var(--mut);margin:8px 0 3px}
+select,input{width:100%;font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)}
+.bar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin:12px 0}
+.tiers{font-size:13px;color:var(--mut)}
+.share{font:inherit;font-size:13px;padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:none;color:var(--fg);cursor:pointer;white-space:nowrap}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px}
+.chip{font:inherit;font-size:13px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:none;color:var(--fg);cursor:pointer}
+.chip.on{background:var(--db);border-color:var(--mut)}
+.row{padding:10px 0;border-bottom:1px solid var(--line)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.n{font-weight:600}.tb{font-size:12px;color:var(--mut);font-weight:400;margin-left:6px}
+.b{font-size:12px;padding:2px 8px;border-radius:6px;white-space:nowrap}
+.b0{background:var(--b0);color:var(--c0)}.b1{background:var(--b1);color:var(--c1)}.b2{background:var(--b2);color:var(--c2)}.bD{background:var(--db);color:var(--d)}
+.k0{color:var(--c0);font-weight:600}.k1{color:var(--c1);font-weight:600}.k2{color:var(--c2);font-weight:600}
+.r{font-size:13px;color:var(--mut);margin:4px 0 0}
+.v{color:var(--fg);font-weight:500}
+.msg{font-size:14px;color:var(--mut);padding:12px 0}
+.foot{font-size:12px;color:var(--mut);margin-top:20px}
+</style>
+</head>
+<body>
+<main>
+<h1>Smash Counterpick Helper</h1>
+<p class="sub">Pick 2 or 3 characters you play. For every fighter in Ultimate, see which of yours to pick, assuming you're equally good on each.</p>
+<label for="p0">Character 1</label><select id="p0"></select>
+<label for="p1">Character 2</label><select id="p1"></select>
+<label for="p2">Character 3 (optional)</label><select id="p2"></select>
+<div class="bar"><span class="tiers" id="tiers"></span><button class="share" id="share">Share link</button></div>
+<input id="q" placeholder="Search an opponent" aria-label="Search an opponent">
+<div class="chips" id="chips"></div>
+<div id="list"></div>
+<p class="foot">Matchup estimates combine UltRank's May 2026 tier list with a few broad traits per fighter (speed, weight, range, projectiles, recovery, kill power). Ultimate has no agreed-upon full matchup chart, so treat these as a starting point. Assumes equal skill on every character.</p>
+</main>
+<script>
+// Fighters in UltRank 2026 order. Traits: Z zoner, R fast, A slow, H heavy, L light, P weak recovery,
+// E strong edgeguarder, C combo-heavy, K kill power, S disjointed range, F reflector/absorber, W struggles to kill
+const RAW=[
+["Steve","ZEK"],["Sonic","RCE"],["Snake","ZHKE"],["Mr. Game & Watch","LFEK"],["R.O.B.","ZH"],["Min Min","ZSKP"],["Kazuya","HKPC"],
+["Diddy Kong","RCWP"],["Pyra / Mythra","RSKCP"],["Luigi","CKP"],["Peach / Daisy","CE"],["Yoshi","H"],["Fox","RCL"],["Joker","RCEW"],
+["Samus / Dark Samus","ZH"],["Palutena","ZCF"],["Pikachu","RCLE"],["Olimar","ZLKP"],["Wario","KH"],
+["Roy","RKCP"],["Hero","ZKS"],["Bayonetta","CEL"],["Mario","CE"],["Wolf","ZRC"],["Mii Brawler","RCKP"],["Mega Man","Z"],["Sora","LW"],["Cloud","SKPE"],["Ryu","CKP"],
+["Corrin","SK"],["Falco","ZCP"],["Shulk","SKP"],["Captain Falcon","RCKP"],["Greninja","RZC"],
+["Terry","HKCPA"],["Pokémon Trainer","CK"],["Lucina","S"],["Ken","CKRP"],["Zero Suit Samus","RCEL"],["Pac-Man","ZE"],["Toon Link","ZE"],["Young Link","ZEL"],["Pit / Dark Pit","ZF"],["Rosalina & Luma","LZ"],["Ice Climbers","CKP"],["Donkey Kong","HKP"],
+["Pichu","RCL"],["Inkling","RCZ"],["Ness","FKP"],["Sheik","RCWL"],["Byleth","SKPA"],["Meta Knight","RCLE"],["Sephiroth","SLZK"],["Duck Hunt","ZL"],
+["Isabelle","ZWF"],["Mii Gunner","Z"],["Lucas","FZP"],["Wii Fit Trainer","Z"],["Robin","ZA"],["Ridley","HKP"],
+["Banjo & Kazooie","ZH"],["Bowser Jr.","ZH"],["Lucario","K"],["Jigglypuff","LE"],["Chrom","SKP"],["Link","ZSP"],["Bowser","HK"],["Incineroar","HKAP"],["Kirby","L"],["Piranha Plant","ZHA"],
+["Mii Swordfighter","ZS"],["Mewtwo","LK"],["Zelda","ZKA"],
+["Marth","SKP"],["Dr. Mario","KAP"],["Ike","SKP"],["King K. Rool","HZKA"],["King Dedede","HZA"],["Villager","ZEF"],
+["Simon / Richter","ZSPA"],["Little Mac","RKP"],["Ganondorf","HKAP"]
+];
+const BANDS=[["S+",7],["S-",7],["A+",5],["A",10],["A-",5],["B+",12],["B-",8],["C+",6],["C-",10],["D+",3],["D-",6],["E",3]];
+const norm=s=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+const slug=s=>norm(s).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+const C=[];let bi=0,left=BANDS[0][1];
+RAW.forEach(([n,t],i)=>{if(left===0){bi++;left=BANDS[bi][1];}left--;C.push({n,t,i,s:1-i/81,band:BANDS[bi][0],id:slug(n)});});
+// [attacker trait, defender trait, weight, your edge, their edge]
+const RULES=[
+["Z","A",.45,"you can camp them out","they can camp you out"],
+["Z","P",.2,"your projectiles threaten their recovery","their projectiles threaten your recovery"],
+["R","Z",.35,"your speed gets through their zoning","their speed gets through your zoning"],
+["E","P",.4,"you can edgeguard their recovery","they edgeguard your recovery"],
+["C","H",.35,"their big body eats your combos","they combo your big body"],
+["K","L",.3,"you kill them early","they kill you early"],
+["F","Z",.35,"you reflect or absorb their projectiles","they reflect or absorb your projectiles"],
+["H","W",.3,"they struggle to kill you","you struggle to kill them"],
+["R","A",.25,"you outpace them","they outpace you"],
+["S","short",.2,"you outrange them","they outrange you"]
+];
+const W=1.6,CLOSE=0.15;
+function edges(a,b){return RULES.filter(r=>a.t.includes(r[0])&&(r[1]==="short"?!/[SZ]/.test(b.t):b.t.includes(r[1])));}
+function mu(a,b){
+if(a===b)return{v:0,ditto:true,pos:[],neg:[],tier:0};
+const tier=W*(a.s-b.s),pos=edges(a,b),neg=edges(b,a);
+const v=tier+pos.reduce((x,r)=>x+r[2],0)-neg.reduce((x,r)=>x+r[2],0);
+return{v:Math.max(-2,Math.min(2,v)),pos,neg,tier};
+}
+const cap=s=>s[0].toUpperCase()+s.slice(1);
+const byW=(x,y)=>y[2]-x[2];
+function why(a,b,m){
+if(m.ditto)return"Ditto.";
+const tb=a.band+" vs "+b.band,good=[],bad=[];
+if(m.tier>=0.35)good.push("Higher tier ("+tb+")");
+m.pos.slice().sort(byW).slice(0,2).forEach(r=>good.push(cap(r[3])));
+m.neg.slice().sort(byW).forEach(r=>bad.push(r[4]));
+if(m.tier<=-0.35)bad.push("they're the higher-tier character ("+tb+")");
+let s=good.length?good.join(". ")+".":"";
+if(bad.length)s+=(s?" ":"")+"Watch out: "+bad[0]+".";
+return s||"No big edges either way ("+tb+").";
+}
+function verdict(v){return v>=0.6?"Favored":v>=0.2?"Slight edge":v>-0.2?"Even":v>-0.6?"Slightly behind":"Uphill";}
+function cond(o,x,y){
+const anti=c=>/[RF]/.test(c.t);
+if(o.t.includes("Z")&&anti(x)!==anti(y)){const a=anti(x)?x:y,b=anti(x)?y:x;return a.n+" if they camp, "+b.n+" if they come to you.";}
+return"Close call: go with whichever you're more comfortable on.";
+}
+const $=id=>document.getElementById(id);
+const sels=[$("p0"),$("p1"),$("p2")],q=$("q"),list=$("list"),chips=$("chips"),tiers=$("tiers");
+const sorted=C.slice().sort((a,b)=>a.n.localeCompare(b.n));
+sels.forEach((s,k)=>{s.innerHTML=(k===2?'<option value="">None</option>':"")+sorted.map(c=>'<option value="'+c.i+'">'+c.n+'</option>').join("");});
+let f="all";
+function initial(){
+const fromIds=ids=>ids.map(id=>C.findIndex(c=>c.id===id)).filter(i=>i>=0);
+let p=fromIds(decodeURIComponent(location.hash.slice(1)).split(","));
+if(p.length<2){try{p=fromIds((localStorage.getItem("picks")||"").split(","));}catch(e){p=[];}}
+if(p.length<2)p=fromIds(["terry","pyra-mythra","joker"]);
+sels.forEach((s,k)=>{s.value=p[k]!==undefined?String(p[k]):"";});
+}
+function row(r){
+const o=r.o;
+const head=b=>'<div class="row"><div class="top"><span class="n">'+o.n+'<span class="tb">'+o.band+'</span></span>'+b+'</div>';
+if(!r.close){const t=r.rs[0];return head('<span class="b b'+t.p.k+'">'+t.p.c.n+'</span>')+'<p class="r"><span class="v">'+verdict(t.m.v)+'.</span> '+why(t.p.c,o,t.m)+'</p></div>';}
+const[x,y]=r.rs;
+const line=z=>'<p class="r"><span class="k'+z.p.k+'">'+z.p.c.n+'</span>: <span class="v">'+verdict(z.m.v)+'.</span> '+why(z.p.c,o,z.m)+'</p>';
+return head('<span class="b bD">Close</span>')+line(x)+line(y)+'<p class="r">'+cond(o,x.p.c,y.p.c)+'</p></div>';
+}
+function render(){
+const sel=sels.map((s,k)=>s.value===""?null:{c:C[+s.value],k}).filter(Boolean);
+const ids=sel.map(o=>o.c.id);
+const ok=sel.length>=2&&new Set(ids).size===ids.length;
+if(!ok){chips.innerHTML="";tiers.textContent="";list.innerHTML='<p class="msg">Pick at least two different characters.</p>';return;}
+try{history.replaceState(null,"","#"+ids.join(","));}catch(e){}
+try{localStorage.setItem("picks",ids.join(","));}catch(e){}
+tiers.innerHTML=sel.map(o=>'<span class="k'+o.k+'">'+o.c.n+'</span> '+o.c.band).join(" · ");
+const res=sorted.map(o=>{const rs=sel.map(p=>({p,m:mu(p.c,o)})).sort((x,y)=>y.m.v-x.m.v);return{o,rs,close:rs[0].m.v-rs[1].m.v<CLOSE};});
+if(f!=="all"&&f!=="close"&&!sel.some(p=>String(p.k)===f))f="all";
+const cnt=k=>res.filter(r=>!r.close&&String(r.rs[0].p.k)===k).length;
+chips.innerHTML="";
+[["all","All "+res.length]].concat(sel.map(p=>[String(p.k),p.c.n+" "+cnt(String(p.k))]),[["close","Close "+res.filter(r=>r.close).length]]).forEach(([k,t])=>{
+const b=document.createElement("button");b.className="chip"+(k===f?" on":"");b.textContent=t;b.onclick=()=>{f=k;render();};chips.appendChild(b);});
+const s=norm(q.value.trim());
+const rows=res.filter(r=>norm(r.o.n).includes(s)&&(f==="all"||(f==="close"?r.close:!r.close&&String(r.rs[0].p.k)===f)));
+list.innerHTML=rows.length?rows.map(row).join(""):'<p class="msg">No fighter matches that search.</p>';
+}
+$("share").onclick=async()=>{
+const url=location.href,b=$("share");
+if(navigator.share){try{await navigator.share({title:"Smash Counterpick Helper",url});}catch(e){}return;}
+try{await navigator.clipboard.writeText(url);b.textContent="Copied!";setTimeout(()=>{b.textContent="Share link";},1500);}catch(e){prompt("Copy this link:",url);}
+};
+sels.forEach(s=>s.onchange=render);
+q.oninput=render;
+initial();render();
+</script>
+</body>
+</html>
