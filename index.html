@@ -28,6 +28,7 @@ select,input{width:100%;font:inherit;padding:9px 12px;border:1px solid var(--lin
 .k0{color:var(--c0);font-weight:600}.k1{color:var(--c1);font-weight:600}.k2{color:var(--c2);font-weight:600}
 .r{font-size:13px;color:var(--mut);margin:4px 0 0}
 .v{color:var(--fg);font-weight:500}
+.lk{font-size:12px;color:var(--mut);white-space:nowrap}
 .msg{font-size:14px;color:var(--mut);padding:12px 0}
 .foot{font-size:12px;color:var(--mut);margin-top:20px}
 </style>
@@ -35,15 +36,16 @@ select,input{width:100%;font:inherit;padding:9px 12px;border:1px solid var(--lin
 <body>
 <main>
 <h1>Smash Counterpick Helper</h1>
-<p class="sub">Pick 2 or 3 characters you play. For every fighter in Ultimate, see which of yours to pick, assuming you're equally good on each.</p>
-<label for="p0">Character 1</label><select id="p0"></select>
-<label for="p1">Character 2</label><select id="p1"></select>
-<label for="p2">Character 3 (optional)</label><select id="p2"></select>
+<p class="sub">Pick your main and 1 or 2 secondaries. For every fighter in Ultimate, see which of yours to pick.</p>
+<label for="p0">Main</label><select id="p0"></select>
+<label for="p1">Secondary</label><select id="p1"></select>
+<label for="p2">Secondary (optional)</label><select id="p2"></select>
+<label for="adv">How much better are you on your main?</label><select id="adv"></select>
 <div class="bar"><span class="tiers" id="tiers"></span><button class="share" id="share">Share link</button></div>
 <input id="q" placeholder="Search an opponent" aria-label="Search an opponent">
 <div class="chips" id="chips"></div>
 <div id="list"></div>
-<p class="foot">Matchup estimates combine UltRank's May 2026 tier list with a few broad traits per fighter (speed, weight, range, projectiles, recovery, kill power). Ultimate has no agreed-upon full matchup chart, so treat these as a starting point. Assumes equal skill on every character.</p>
+<p class="foot">Picks are estimates built from UltRank's May 2026 tier list, a few broad traits per fighter (speed, weight, range, projectiles, recovery, kill power), and a bonus for your main. There's no current, complete pro matchup chart to pull from, so tap "Real results" on any row to see actual tournament win rates for that matchup on smashmatchup.com.</p>
 </main>
 <script>
 // Fighters in UltRank 2026 order. Traits: Z zoner, R fast, A slow, H heavy, L light, P weak recovery,
@@ -63,24 +65,27 @@ const RAW=[
 ["Simon / Richter","ZSPA"],["Little Mac","RKP"],["Ganondorf","HKAP"]
 ];
 const BANDS=[["S+",7],["S-",7],["A+",5],["A",10],["A-",5],["B+",12],["B-",8],["C+",6],["C-",10],["D+",3],["D-",6],["E",3]];
+// smashmatchup.com page names where they differ from ours
+const SM={"r-o-b":"rob","mr-game-watch":"mr-game-and-watch","banjo-kazooie":"banjo","rosalina-luma":"rosalina","peach-daisy":"peach","samus-dark-samus":"samus","pit-dark-pit":"pit","simon-richter":"richter"};
 const norm=s=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 const slug=s=>norm(s).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 const C=[];let bi=0,left=BANDS[0][1];
-RAW.forEach(([n,t],i)=>{if(left===0){bi++;left=BANDS[bi][1];}left--;C.push({n,t,i,s:1-i/81,band:BANDS[bi][0],id:slug(n)});});
+RAW.forEach(([n,t],i)=>{if(left===0){bi++;left=BANDS[bi][1];}left--;const id=slug(n);C.push({n,t,i,s:1-i/81,band:BANDS[bi][0],id,sm:SM[id]||id});});
 // [attacker trait, defender trait, weight, your edge, their edge]
 const RULES=[
-["Z","A",.45,"you can camp them out","they can camp you out"],
-["Z","P",.2,"your projectiles threaten their recovery","their projectiles threaten your recovery"],
-["R","Z",.35,"your speed gets through their zoning","their speed gets through your zoning"],
-["E","P",.4,"you can edgeguard their recovery","they edgeguard your recovery"],
-["C","H",.35,"their big body eats your combos","they combo your big body"],
-["K","L",.3,"you kill them early","they kill you early"],
-["F","Z",.35,"you reflect or absorb their projectiles","they reflect or absorb your projectiles"],
+["Z","A",.35,"you can camp them out","they can camp you out"],
+["Z","P",.15,"your projectiles threaten their recovery","their projectiles threaten your recovery"],
+["R","Z",.3,"your speed gets through their zoning","their speed gets through your zoning"],
+["E","P",.3,"you can edgeguard their recovery","they edgeguard your recovery"],
+["C","H",.3,"their big body eats your combos","they combo your big body"],
+["K","L",.25,"you kill them early","they kill you early"],
+["F","Z",.3,"you reflect or absorb their projectiles","they reflect or absorb your projectiles"],
 ["H","W",.3,"they struggle to kill you","you struggle to kill them"],
-["R","A",.25,"you outpace them","they outpace you"],
-["S","short",.2,"you outrange them","they outrange you"]
+["R","A",.2,"you outpace them","they outpace you"],
+["S","short",.15,"you outrange them","they outrange you"]
 ];
-const W=1.6,CLOSE=0.15;
+const W=0.9,CLOSE=0.12;
+const ADV=[["Same on all",0],["A bit better",.2],["Clearly better",.35],["Way better",.6]];
 function edges(a,b){return RULES.filter(r=>a.t.includes(r[0])&&(r[1]==="short"?!/[SZ]/.test(b.t):b.t.includes(r[1])));}
 function mu(a,b){
 if(a===b)return{v:0,ditto:true,pos:[],neg:[],tier:0};
@@ -93,38 +98,46 @@ const byW=(x,y)=>y[2]-x[2];
 function why(a,b,m){
 if(m.ditto)return"Ditto.";
 const tb=a.band+" vs "+b.band,good=[],bad=[];
-if(m.tier>=0.35)good.push("Higher tier ("+tb+")");
+if(m.tier>=0.2)good.push("Higher tier ("+tb+")");
 m.pos.slice().sort(byW).slice(0,2).forEach(r=>good.push(cap(r[3])));
 m.neg.slice().sort(byW).forEach(r=>bad.push(r[4]));
-if(m.tier<=-0.35)bad.push("they're the higher-tier character ("+tb+")");
+if(m.tier<=-0.2)bad.push("they're the higher-tier character ("+tb+")");
 let s=good.length?good.join(". ")+".":"";
 if(bad.length)s+=(s?" ":"")+"Watch out: "+bad[0]+".";
 return s||"No big edges either way ("+tb+").";
 }
-function verdict(v){return v>=0.6?"Favored":v>=0.2?"Slight edge":v>-0.2?"Even":v>-0.6?"Slightly behind":"Uphill";}
+function verdict(v){return v>=0.5?"Favored":v>=0.15?"Slight edge":v>-0.15?"Even":v>-0.5?"Slightly behind":"Uphill";}
 function cond(o,x,y){
 const anti=c=>/[RF]/.test(c.t);
 if(o.t.includes("Z")&&anti(x)!==anti(y)){const a=anti(x)?x:y,b=anti(x)?y:x;return a.n+" if they camp, "+b.n+" if they come to you.";}
 return"Close call: go with whichever you're more comfortable on.";
 }
+const link=(a,o)=>a===o?"":' <a class="lk" href="https://smashmatchup.com/m/'+a.sm+'/'+o.sm+'" target="_blank" rel="noopener">Real results ↗</a>';
 const $=id=>document.getElementById(id);
-const sels=[$("p0"),$("p1"),$("p2")],q=$("q"),list=$("list"),chips=$("chips"),tiers=$("tiers");
+const sels=[$("p0"),$("p1"),$("p2")],advSel=$("adv"),q=$("q"),list=$("list"),chips=$("chips"),tiers=$("tiers");
 const sorted=C.slice().sort((a,b)=>a.n.localeCompare(b.n));
 sels.forEach((s,k)=>{s.innerHTML=(k===2?'<option value="">None</option>':"")+sorted.map(c=>'<option value="'+c.i+'">'+c.n+'</option>').join("");});
+advSel.innerHTML=ADV.map((a,i)=>'<option value="'+i+'">'+a[0]+'</option>').join("");
 let f="all";
 function initial(){
 const fromIds=ids=>ids.map(id=>C.findIndex(c=>c.id===id)).filter(i=>i>=0);
-let p=fromIds(decodeURIComponent(location.hash.slice(1)).split(","));
-if(p.length<2){try{p=fromIds((localStorage.getItem("picks")||"").split(","));}catch(e){p=[];}}
+let parts=decodeURIComponent(location.hash.slice(1)).split("|");
+let p=fromIds((parts[0]||"").split(",")),a=parts[1];
+if(p.length<2){try{const s=(localStorage.getItem("picks")||"").split("|");p=fromIds((s[0]||"").split(","));a=s[1];}catch(e){p=[];}}
 if(p.length<2)p=fromIds(["terry","pyra-mythra","joker"]);
+advSel.value=(a!==undefined&&ADV[+a])?String(+a):"2";
 sels.forEach((s,k)=>{s.value=p[k]!==undefined?String(p[k]):"";});
 }
-function row(r){
+function row(r,bonus){
 const o=r.o;
 const head=b=>'<div class="row"><div class="top"><span class="n">'+o.n+'<span class="tb">'+o.band+'</span></span>'+b+'</div>';
-if(!r.close){const t=r.rs[0];return head('<span class="b b'+t.p.k+'">'+t.p.c.n+'</span>')+'<p class="r"><span class="v">'+verdict(t.m.v)+'.</span> '+why(t.p.c,o,t.m)+'</p></div>';}
+if(!r.close){
+const t=r.rs[0];let note="";
+if(t.p.k===0&&bonus>0){const alt=r.rs.filter(z=>z.p.k!==0).sort((x,y)=>y.m.v-x.m.v)[0];if(alt&&alt.m.v>t.m.v+0.05)note=" Comfort pick: "+alt.p.c.n+" is a bit better on paper.";}
+return head('<span class="b b'+t.p.k+'">'+t.p.c.n+'</span>')+'<p class="r"><span class="v">'+verdict(t.m.v)+'.</span> '+why(t.p.c,o,t.m)+note+link(t.p.c,o)+'</p></div>';
+}
 const[x,y]=r.rs;
-const line=z=>'<p class="r"><span class="k'+z.p.k+'">'+z.p.c.n+'</span>: <span class="v">'+verdict(z.m.v)+'.</span> '+why(z.p.c,o,z.m)+'</p>';
+const line=z=>'<p class="r"><span class="k'+z.p.k+'">'+z.p.c.n+'</span>: <span class="v">'+verdict(z.m.v)+'.</span> '+why(z.p.c,o,z.m)+link(z.p.c,o)+'</p>';
 return head('<span class="b bD">Close</span>')+line(x)+line(y)+'<p class="r">'+cond(o,x.p.c,y.p.c)+'</p></div>';
 }
 function render(){
@@ -132,10 +145,14 @@ const sel=sels.map((s,k)=>s.value===""?null:{c:C[+s.value],k}).filter(Boolean);
 const ids=sel.map(o=>o.c.id);
 const ok=sel.length>=2&&new Set(ids).size===ids.length;
 if(!ok){chips.innerHTML="";tiers.textContent="";list.innerHTML='<p class="msg">Pick at least two different characters.</p>';return;}
-try{history.replaceState(null,"","#"+ids.join(","));}catch(e){}
-try{localStorage.setItem("picks",ids.join(","));}catch(e){}
-tiers.innerHTML=sel.map(o=>'<span class="k'+o.k+'">'+o.c.n+'</span> '+o.c.band).join(" · ");
-const res=sorted.map(o=>{const rs=sel.map(p=>({p,m:mu(p.c,o)})).sort((x,y)=>y.m.v-x.m.v);return{o,rs,close:rs[0].m.v-rs[1].m.v<CLOSE};});
+const state=ids.join(",")+"|"+advSel.value;
+try{history.replaceState(null,"","#"+state);}catch(e){}
+try{localStorage.setItem("picks",state);}catch(e){}
+const bonus=ADV[+advSel.value][1];
+tiers.innerHTML=sel.map(o=>'<span class="k'+o.k+'">'+o.c.n+'</span> '+o.c.band+(o.k===0?" (main)":"")).join(" · ");
+const res=sorted.map(o=>{
+const rs=sel.map(p=>{const m=mu(p.c,o);return{p,m,sc:m.v+(p.k===0?bonus:0)};}).sort((x,y)=>y.sc-x.sc);
+return{o,rs,close:rs[0].sc-rs[1].sc<CLOSE};});
 if(f!=="all"&&f!=="close"&&!sel.some(p=>String(p.k)===f))f="all";
 const cnt=k=>res.filter(r=>!r.close&&String(r.rs[0].p.k)===k).length;
 chips.innerHTML="";
@@ -143,7 +160,7 @@ chips.innerHTML="";
 const b=document.createElement("button");b.className="chip"+(k===f?" on":"");b.textContent=t;b.onclick=()=>{f=k;render();};chips.appendChild(b);});
 const s=norm(q.value.trim());
 const rows=res.filter(r=>norm(r.o.n).includes(s)&&(f==="all"||(f==="close"?r.close:!r.close&&String(r.rs[0].p.k)===f)));
-list.innerHTML=rows.length?rows.map(row).join(""):'<p class="msg">No fighter matches that search.</p>';
+list.innerHTML=rows.length?rows.map(r=>row(r,bonus)).join(""):'<p class="msg">No fighter matches that search.</p>';
 }
 $("share").onclick=async()=>{
 const url=location.href,b=$("share");
@@ -151,6 +168,7 @@ if(navigator.share){try{await navigator.share({title:"Smash Counterpick Helper",
 try{await navigator.clipboard.writeText(url);b.textContent="Copied!";setTimeout(()=>{b.textContent="Share link";},1500);}catch(e){prompt("Copy this link:",url);}
 };
 sels.forEach(s=>s.onchange=render);
+advSel.onchange=render;
 q.oninput=render;
 initial();render();
 </script>
